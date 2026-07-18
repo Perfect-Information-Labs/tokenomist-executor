@@ -1,6 +1,6 @@
 # Tokenomist Executor
 
-Onchain Tokenomist has a native **executor** role — a vault-scoped identity specifically designed to be filled by an AI agent, distinct from the vault's creator and admins. This API is the interface for that role: it lets an agent construct correctly-encoded, protocol-specific transactions (proposals, mints, merkle proofs) for the vault it's configured to serve — gated by x402 nanopayments via Circle Gateway on Arc.
+Onchain Tokenomist has a native **executor** role—a vault-scoped identity specifically designed to be fulfilled by an AI agent, distinct from the vault's creator and administrators. This API is the interface for that role, enabling AI agents to inspect protocol state and construct correctly encoded, protocol-specific transactions, including proposals, token pass mints, and Merkle-proof operations, for the vaults they are authorized to serve. Access is gated by x402 nanopayments through Circle Gateway on Arc.
 
 This API does **not** hold custody of any private key and never signs or broadcasts transactions on your behalf. Every write route returns unsigned calldata (`to` + `data`); the caller signs and submits it with their own wallet. `msg.sender` on-chain is always the caller's own address — never this API's.
 
@@ -34,9 +34,9 @@ console.log(result.data);
 https://executor.perfectinformationlabs.com
 ```
 
-## OpenAPI spec
+## OpenAPI Specification
 
-Machine-readable spec available at:
+Machine-readable OpenAPI specification available at:
 ```
 GET /openapi.yaml
 ```
