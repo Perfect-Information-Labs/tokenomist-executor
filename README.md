@@ -41,6 +41,15 @@ Machine-readable OpenAPI specification available at:
 GET /openapi.yaml
 ```
 
+## Fetching these docs programmatically
+
+This page is available as rendered HTML (default) or raw Markdown, depending on your `Accept` header:
+
+GET /docs
+Accept: text/markdown
+
+Returns the raw Markdown source instead of the rendered HTML page — useful if your agent's tooling prefers parsing plain Markdown over HTML.
+
 ## Health check
 
 GET /health
