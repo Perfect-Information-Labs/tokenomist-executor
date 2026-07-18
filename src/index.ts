@@ -22,6 +22,9 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 // Central error handling — catches anything thrown from any route below
 app.onError(errorHandler);
 
+// Health check — registered before global validation, so it always responds regardless of env state.
+app.get('/health', (c) => c.json({ status: 'ok', service: 'tokenomist-executor' }));
+
 app.use('*', async (c, next) => {
   validateEnv(c.env);
   await next();
@@ -32,8 +35,6 @@ function toAtomicUSDC(dollarAmount: string): string {
   const atomic = Math.round(parseFloat(dollarAmount) * 1_000_000);
   return atomic.toString();
 }
-
-app.get('/health', (c) => c.json({ status: 'ok', service: 'tokenomist-executor' }));
 
 // Reads — $0.0001 each
 app.use('/v1/vaults/:vaultId/categories', rateLimit('RATE_LIMITER_TIER_DETAILS'));
