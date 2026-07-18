@@ -22,7 +22,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 // Central error handling — catches anything thrown from any route below
 app.onError(errorHandler);
 
-// Health check — registered before global validation, so it always responds regardless of env state.
+// Health check always responds regardless of env state.
 app.get('/health', (c) => c.json({ status: 'ok', service: 'tokenomist-executor' }));
 
 app.use('*', async (c, next) => {
