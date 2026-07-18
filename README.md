@@ -33,6 +33,14 @@ console.log(result.data);
 ```
 https://executor.perfectinformationlabs.com
 ```
+
+## OpenAPI spec
+
+Machine-readable spec available at:
+```
+GET /openapi.yaml
+```
+
 ## Health check
 
 GET /health

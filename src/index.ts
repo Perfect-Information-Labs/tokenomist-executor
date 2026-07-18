@@ -16,6 +16,9 @@ import { validateProposeMint,
   validateAccountParam, 
   validateCategoryParam 
 } from './middleware/validate';
+import docsRoute from './routes/docs';
+// @ts-ignore - text import via wrangler rule
+import openapiYaml from '../openapi.yaml';
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -24,6 +27,10 @@ app.onError(errorHandler);
 
 // Health check always responds regardless of env state.
 app.get('/health', (c) => c.json({ status: 'ok', service: 'tokenomist-executor' }));
+app.route('/', docsRoute);
+app.get('/openapi.yaml', (c) =>
+  c.text(openapiYaml, 200, { 'Content-Type': 'application/yaml' })
+);
 
 app.use('*', async (c, next) => {
   validateEnv(c.env);

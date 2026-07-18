@@ -1,0 +1,473 @@
+openapi: 3.0.3
+info:
+  title: Tokenomist Executor
+  description: >
+    Onchain Tokenomist has a native executor role — a vault-scoped identity
+    specifically designed to be filled by an AI agent, distinct from the
+    vault's creator and admins. This API is the interface for that role: it
+    lets an agent construct correctly-encoded, protocol-specific transactions
+    (proposals, mints, merkle proofs) for the vault it's configured to serve.
+
+    This API does not hold custody of any private key and never signs or
+    broadcasts transactions on behalf of the caller. Every write route
+    returns unsigned calldata (`to` + `data`); the caller signs and submits
+    it with their own wallet. `msg.sender` on-chain is always the caller's
+    own address — never this API's.
+
+    All endpoints are gated by x402 nanopayments settled via Circle Gateway
+    on Arc. See https://executor.perfectinformationlabs.com/docs for the
+    full prose guide, prerequisites, and a worked end-to-end example.
+  version: "1.0.0"
+  contact:
+    url: https://perfectinformationlabs.com
+servers:
+  - url: https://executor.perfectinformationlabs.com
+    description: Production (Arc Testnet)
+
+tags:
+  - name: Writes
+    description: Return unsigned calldata for state-changing contract calls
+  - name: Reads
+    description: Return live on-chain data
+  - name: System
+    description: Non-billed operational endpoints
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Free, unauthenticated. Confirms the Worker is running.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: tokenomist-executor }
+
+  /v1/vaults/{vaultId}/proposals:
+    post:
+      tags: [Writes]
+      summary: Propose a mint category
+      description: >
+        Builds calldata for `proposeMintCategory`. Computes a merkle root
+        per tier from a plain address list. A single proposal can include
+        multiple tiers at once, each with its own address list and supply
+        count, created together in one transaction. Price: $0.01 (10000
+        USDC atomic units).
+      parameters:
+        - name: vaultId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, tiers]
+              properties:
+                category:
+                  type: string
+                  description: Case-sensitive, must match vault's configured category exactly (max 31 bytes UTF-8)
+                tiers:
+                  type: array
+                  items:
+                    type: object
+                    required: [tier, addresses, supplyCount]
+                    properties:
+                      tier:
+                        type: string
+                        description: Case-sensitive, max 31 bytes UTF-8
+                      addresses:
+                        type: array
+                        items: { type: string }
+                        description: Full allowlist for this tier, used to compute the merkle root
+                      supplyCount:
+                        type: integer
+            example:
+              category: MockTokenomics
+              tiers:
+                - tier: Staff
+                  addresses: ["0x3d3a044de85563a15dc45d7a0dbcc7df86450f38"]
+                  supplyCount: 10
+      responses:
+        "200":
+          description: Unsigned proposal transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vaultId: { type: string }
+                  category: { type: string }
+                  to: { type: string }
+                  data: { type: string }
+                  tiers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tier: { type: string }
+                        merkleRoot: { type: string }
+                        supplyCount: { type: integer }
+                        addressCount: { type: integer }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/proposals/{proposalId}/mint:
+    post:
+      tags: [Writes]
+      summary: Mint passes for an approved proposal
+      description: >
+        Builds calldata for `mintPasses`. Requires the proposal to already
+        be approved on-chain by the vault's admins. Recipients over 60 are
+        automatically split into multiple transactions. Minting is
+        resumable — you may mint a subset now and the remainder later
+        under the same proposal. Price: $0.01 (10000 USDC atomic units).
+      parameters:
+        - name: proposalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tier, addresses, recipients]
+              properties:
+                tier:
+                  type: string
+                  description: Must match the tier string used at propose time exactly
+                addresses:
+                  type: array
+                  items: { type: string }
+                  description: Full original allowlist used when the proposal was created — needed to rebuild the identical merkle tree
+                recipients:
+                  type: array
+                  items: { type: string }
+                  description: Which addresses to mint in this call — may be a subset of addresses
+            example:
+              tier: Staff
+              addresses: ["0x3d3a044de85563a15dc45d7a0dbcc7df86450f38"]
+              recipients: ["0x3d3a044de85563a15dc45d7a0dbcc7df86450f38"]
+      responses:
+        "200":
+          description: One or more unsigned mint transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchedTxResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/vaults/{vaultId}/mint-direct:
+    post:
+      tags: [Writes]
+      summary: Mint directly (no-admin / creator-only vaults)
+      description: >
+        Builds calldata for `mintDirect`. Only valid for vaults with no
+        admins configured. Recipients over 60 are automatically split into
+        multiple transactions. Price: $0.01 (10000 USDC atomic units).
+      parameters:
+        - name: vaultId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, tier, recipients]
+              properties:
+                category: { type: string }
+                tier: { type: string }
+                recipients:
+                  type: array
+                  items: { type: string }
+            example:
+              category: Community
+              tier: Standard
+              recipients: ["0x3d3a044de85563a15dc45d7a0dbcc7df86450f38"]
+      responses:
+        "200":
+          description: One or more unsigned mint transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchedTxResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/accounts/{account}/proposals:
+    get:
+      tags: [Reads]
+      summary: Get proposals for an account
+      description: >
+        Returns every proposal tied to any vault where the address is
+        creator or executor — not only proposals it personally submitted.
+        Price: $0.0001 (100 USDC atomic units).
+      parameters:
+        - name: account
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of proposals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account: { type: string }
+                  proposals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProposalInfo"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/vaults/{vaultId}/summary:
+    get:
+      tags: [Reads]
+      summary: Get vault summary
+      description: >
+        Returns aggregated vault-level data — roles, deposits, allocation
+        totals, finalization status. Price: $0.0005 (500 USDC atomic units).
+      parameters:
+        - name: vaultId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Vault summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultSummary"
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "404": { $ref: "#/components/responses/VaultNotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/vaults/{vaultId}/categories/{category}/tiers:
+    get:
+      tags: [Reads]
+      summary: Get tier details for a category
+      description: >
+        Returns supply/allocation detail for every tier in a category.
+        Useful to check before calling any write route. Price: $0.0001
+        (100 USDC atomic units).
+      parameters:
+        - name: vaultId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: category
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tier details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vaultId: { type: string }
+                  category: { type: string }
+                  tiers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TierDetail"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/vaults/{vaultId}/categories:
+    get:
+      tags: [Reads]
+      summary: Get vault categories
+      description: >
+        Returns every category configured for a vault, decoded to plain
+        strings. Use as the starting point for discovering a vault's
+        structure. Price: $0.0001 (100 USDC atomic units).
+      parameters:
+        - name: vaultId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vaultId: { type: string }
+                  categories:
+                    type: array
+                    items: { type: string }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+components:
+  schemas:
+    TxChunk:
+      type: object
+      properties:
+        to: { type: string }
+        data: { type: string }
+        chunkIndex: { type: integer }
+        recipientCount: { type: integer }
+
+    BatchedTxResponse:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TxChunk"
+        totalChunks: { type: integer }
+        totalRecipients: { type: integer }
+
+    ProposalInfo:
+      type: object
+      properties:
+        proposalId: { type: string }
+        vaultId: { type: string }
+        category: { type: string }
+        proposer: { type: string }
+        admin1: { type: string }
+        admin2: { type: string }
+        admin1Approved: { type: boolean }
+        admin2Approved: { type: boolean }
+        rejected: { type: boolean }
+        expired: { type: boolean }
+        executed: { type: boolean }
+        proposedAt: { type: string }
+        deadline: { type: string }
+
+    VaultSummary:
+      type: object
+      properties:
+        vaultId: { type: string }
+        tokenAddress: { type: string }
+        creator: { type: string }
+        admin1: { type: string }
+        admin2: { type: string }
+        executor: { type: string }
+        totalDeposited: { type: string }
+        totalAllocated: { type: string }
+        totalClaimed: { type: string }
+        createdAt: { type: string }
+        startTime: { type: string }
+        finalized: { type: boolean }
+        categoryCount: { type: string }
+        totalPassesMinted: { type: string }
+        totalCompletedClaims: { type: string }
+        totalActivePasses: { type: string }
+
+    TierDetail:
+      type: object
+      properties:
+        tier: { type: string }
+        allocationPerPass: { type: string }
+        maxSupply: { type: string }
+        mintedCount: { type: string }
+        remainingSupply: { type: string }
+        totalAllocated: { type: string }
+        passHolderCount: { type: string }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
+
+  responses:
+    ValidationError:
+      description: Invalid input — rejected before payment, no charge
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            invalidAddress:
+              value: { error: InvalidAddressError, message: "recipients is not a valid EVM address: not-a-valid-address" }
+            invalidCategory:
+              value: { error: InvalidCategoryError, message: "category exceeds 31 bytes" }
+            emptyAddressList:
+              value: { error: EmptyAddressListError, message: "addresses must not be empty" }
+            emptyRecipients:
+              value: { error: EmptyRecipientsError, message: "recipients must not be empty" }
+
+    VaultNotFound:
+      description: Vault does not exist on-chain
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: VaultNotFoundError
+            message: "Vault 999999 not found"
+
+    RateLimited:
+      description: Too many requests from this IP
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: RateLimited
+            message: "Too many requests, try again shortly"
+
+    PaymentRequired:
+      description: >
+        x402 payment required. Response body follows the x402 PaymentRequired
+        shape; retry with a signed PAYMENT-SIGNATURE header.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              x402Version: { type: integer }
+              resource:
+                type: object
+                properties:
+                  url: { type: string }
+                  description: { type: string }
+                  mimeType: { type: string }
+              accepts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    scheme: { type: string, example: exact }
+                    network: { type: string, example: "eip155:5042002" }
+                    asset: { type: string }
+                    amount: { type: string, description: "USDC atomic units (6 decimals)" }
+                    payTo: { type: string }
+                    maxTimeoutSeconds: { type: integer }
+                    extra:
+                      type: object
+                      properties:
+                        name: { type: string, example: GatewayWalletBatched }
+                        version: { type: string, example: "1" }
+                        verifyingContract: { type: string }

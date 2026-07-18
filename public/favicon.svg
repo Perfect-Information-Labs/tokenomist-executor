@@ -1,0 +1,63 @@
+<svg width="512" height="512" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+<rect width="100" height="100" fill="#000000"/>
+
+<defs>
+  <!--
+    Glyph box 12w x 27h, segment thickness=3, gaps=1 between segs
+    Top:   y=0  h=3
+    TL/TR: y=4  h=7  x=0or9 w=3
+    Mid:   y=12 h=3
+    BL/BR: y=16 h=7  x=0or9 w=3
+    Bot:   y=24 h=3
+
+    Row1 positions (gap=5): 0@5, x@22, 1@39, f@49, c@66, 0@83
+    Row2 positions (gap=5): 8@22, 1@39, 2@49, 8@66
+
+    Total height: 27+6+2+6+27=68, startY=(100-68)/2=16
+    row1Y=16, divY=49, row2Y=57
+  -->
+
+  <!-- 0: top tl tr bl br bot -->
+  <path id="g0" d="M0,0h12v3h-12z M0,4h3v7h-3z M9,4h3v7h-3z M0,16h3v7h-3z M9,16h3v7h-3z M0,24h12v3h-12z"/>
+
+  <!-- 1: single right bar only, positioned so it sits right of center in its 5-wide slot -->
+  <path id="g1" d="M1,0h3v27h-3z"/>
+
+  <!-- 2: top tr mid bl bot -->
+  <path id="g2" d="M0,0h12v3h-12z M9,4h3v7h-3z M0,12h12v3h-12z M0,16h3v7h-3z M0,24h12v3h-12z"/>
+
+  <!-- 8: all 7 -->
+  <path id="g8" d="M0,0h12v3h-12z M0,4h3v7h-3z M9,4h3v7h-3z M0,12h12v3h-12z M0,16h3v7h-3z M9,16h3v7h-3z M0,24h12v3h-12z"/>
+
+  <!-- f: top, left stem, mid crossbar only -->
+  <path id="gf" d="M0,0h12v3h-12z M0,4h3v20h-3z M0,12h9v3h-9z"/>
+
+  <!-- c: top tl bl bot -->
+  <path id="gc" d="M0,0h12v3h-12z M0,4h3v7h-3z M0,16h3v7h-3z M0,24h12v3h-12z"/>
+
+  <!-- x: two bold diagonals -->
+  <path id="gx" d="M0,0L3,0L12,27L9,27Z M12,0L9,0L0,27L3,27Z"/>
+</defs>
+
+<!-- Row 1: 0@5 x@22 1@39 f@49 c@66 0@83, y=16 -->
+<g fill="#15c6e6">
+  <use href="#g0" transform="translate(5,16)"/>
+  <use href="#gx" transform="translate(22,16)"/>
+  <use href="#g1" transform="translate(39,16)"/>
+  <use href="#gf" transform="translate(49,16)"/>
+  <use href="#gc" transform="translate(66,16)"/>
+  <use href="#g0" transform="translate(83,16)"/>
+</g>
+
+<!-- Divider: full row1 width = from x=5 to x=83+12=95, width=90 -->
+<rect x="5" y="49" width="90" height="2.5" rx="1" fill="#fa7e09"/>
+
+<!-- Row 2: 8@22 1@39 2@49 8@66, y=57 -->
+<g fill="#15c6e6">
+  <use href="#g8" transform="translate(22,57)"/>
+  <use href="#g1" transform="translate(39,57)"/>
+  <use href="#g2" transform="translate(49,57)"/>
+  <use href="#g8" transform="translate(66,57)"/>
+</g>
+
+</svg>
