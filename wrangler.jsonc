@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tokenomist-executor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "unsafe": {
+    "bindings": [
+      {
+        "name": "RATE_LIMITER_WRITE",
+        "type": "ratelimit",
+        "namespace_id": "1001",
+        "simple": { "limit": 20, "period": 60 }
+      },
+      {
+        "name": "RATE_LIMITER_READ",
+        "type": "ratelimit",
+        "namespace_id": "1002",
+        "simple": { "limit": 60, "period": 60 }
+      },
+      {
+        "name": "RATE_LIMITER_TIER_DETAILS",
+        "type": "ratelimit",
+        "namespace_id": "1003",
+        "simple": { "limit": 120, "period": 60 }
+      }
+    ]
+  }
+}
